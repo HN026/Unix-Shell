@@ -41,7 +41,7 @@ struct node_s *parse_command(struct token_s *tok)
         add_child_node(cmd, word);
 
         free_token(tok);
-    } while ((tok == tokenize(src)) != &eof_token);
+    } while ((tok = tokenize(src)) != &eof_token);
 
     return cmd;
 }
