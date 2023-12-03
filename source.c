@@ -58,7 +58,6 @@ char peek_char(struct source_s *src)
     {
         return EOF;
     }
-
     return src->buffer[pos];
 }
 
@@ -71,7 +70,7 @@ void skip_white_spaces(struct source_s *src)
         return;
     }
 
-    while (((c = peek_char(src)) != EOF) && (c == ' ' || c == '\t'))
+    while (((c == peek_char(src)) != EOF) && (c == ' ' || c == '\t'))
     {
         next_char(src);
     }
