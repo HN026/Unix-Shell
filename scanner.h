@@ -11,7 +11,7 @@ struct token_s
 /*The special EOF token, which indicates the end of input*/
 extern struct token_s eof_token;
 
-struct token_s *tokenize(struct source *src);
+struct token_s *tokenize(struct source_s *src);
 void free_token(struct token_s *tok);
 
 #endif
