@@ -257,3 +257,61 @@ void symtab_entry_setval(struct symtab_entry_s *entry, char *val)
 }
 
 // Symbol table functions.
+
+/*Adds the given symbol table to the stack, and assigns the newly added table as the local symbol table.*/
+void  symtab_stack_add(struct symtab_s *symtab)
+{
+    symtab_stack.symtab_list[symtab_stack.symtab_count++] = symtab;
+    symtab_stack.local_symtab = symtab;
+}
+
+/* Creates a new, empty symbol table and pushes it on top of the stack. */
+struct symtab_s *symtab_stack_push(void)
+{
+    struct symtab_s *st = new_symtab(++symtab_level);
+    symtab_stack_add(st);
+    return st;
+}
+
+/* Removes (or pops) the symbol table on top of the stack, adjusting the stack pointers as needed. */
+struct symtab_s *symtab_stack_pop(void)
+{
+    if(symtab_stack.symtab_count == 0)
+    {
+        return NULL;
+    }
+
+    struct symtab_s *st = symtab_stack.symtab_list[symtab_stack.symtab_count-1];
+
+    symtab_stack.symtab_list[--symtab_stack.symtab_count] = NULL;
+    symtab_level--;
+
+    if(symtab_stack.symtab_count==0)
+    {
+        symtab_stack.local_symtab = NULL;
+        symtab_stack.global_symtab = NULL;
+    }
+    else
+    {
+        symtab_stack.local_symtab = symtab_stack.symtab_list[symtab_stack.symtab_count-1];
+    }
+
+    return st;
+}
+
+/* get_local_symtab() & get_global_symtab() return pointers to the local and global symbol tables, respectively. */
+struct symtab_s *get_local_symtab(void)
+{
+    return symtab_stack.local_symtab;
+}
+
+struct symtab_s *get_global_symtab(void)
+{
+    return symtab_stack.global_symtab;
+}
+
+/* Returns a pointer to the symbol table stack.*/
+struct symtab_stack_s *get_symtab_stack(void)
+{
+    return &symtab_stack;
+}
