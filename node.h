@@ -1,3 +1,7 @@
+/*
+@author: Huzaifa Naseer
+*/
+
 #ifndef NODE_H
 #define NODE_H
 
@@ -33,11 +37,11 @@ union symval_u
 
 struct node_s
 {
-    enum node_type_e type;    /* node type */
-    enum val_type_e val_type; /* value type */
-    union symval_u val;       /* value */
-    int children;             /* Number of child nodes */
-    struct node_s *first_child; /* first child node */
+    enum node_type_e type;                      /* node type */
+    enum val_type_e val_type;                   /* value type */
+    union symval_u val;                         /* value */
+    int children;                               /* Number of child nodes */
+    struct node_s *first_child;                 /* first child node */
     struct node_s *next_sibling, *prev_sibling; /* Pointers to next/prev siblings*/
 };
 

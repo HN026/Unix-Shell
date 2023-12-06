@@ -1,3 +1,7 @@
+/*
+@author: Huzaifa Naseer
+*/
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -259,7 +263,7 @@ void symtab_entry_setval(struct symtab_entry_s *entry, char *val)
 // Symbol table functions.
 
 /*Adds the given symbol table to the stack, and assigns the newly added table as the local symbol table.*/
-void  symtab_stack_add(struct symtab_s *symtab)
+void symtab_stack_add(struct symtab_s *symtab)
 {
     symtab_stack.symtab_list[symtab_stack.symtab_count++] = symtab;
     symtab_stack.local_symtab = symtab;
@@ -276,24 +280,24 @@ struct symtab_s *symtab_stack_push(void)
 /* Removes (or pops) the symbol table on top of the stack, adjusting the stack pointers as needed. */
 struct symtab_s *symtab_stack_pop(void)
 {
-    if(symtab_stack.symtab_count == 0)
+    if (symtab_stack.symtab_count == 0)
     {
         return NULL;
     }
 
-    struct symtab_s *st = symtab_stack.symtab_list[symtab_stack.symtab_count-1];
+    struct symtab_s *st = symtab_stack.symtab_list[symtab_stack.symtab_count - 1];
 
     symtab_stack.symtab_list[--symtab_stack.symtab_count] = NULL;
     symtab_level--;
 
-    if(symtab_stack.symtab_count==0)
+    if (symtab_stack.symtab_count == 0)
     {
         symtab_stack.local_symtab = NULL;
         symtab_stack.global_symtab = NULL;
     }
     else
     {
-        symtab_stack.local_symtab = symtab_stack.symtab_list[symtab_stack.symtab_count-1];
+        symtab_stack.local_symtab = symtab_stack.symtab_list[symtab_stack.symtab_count - 1];
     }
 
     return st;

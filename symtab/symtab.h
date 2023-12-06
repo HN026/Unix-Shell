@@ -1,3 +1,7 @@
+/*
+@author: Huzaifa Naseer
+*/
+
 #ifndef SYMTAB_H
 #define SYMTAB_H
 

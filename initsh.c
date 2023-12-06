@@ -1,3 +1,7 @@
+/*
+@author: Huzaifa Naseer
+*/
+
 #include <string.h>
 #include "shell.h"
 #include "symtab/symtab.h"
@@ -42,4 +46,3 @@ void initsh(void)
     entry = add_to_symtab("PS2");
     symtab_entry_setval(entry, "> ");
 }
-

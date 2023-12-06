@@ -1,3 +1,7 @@
+/*
+@author: Huzaifa Naseer
+*/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -149,9 +153,22 @@ int do_command(struct node_s *node)
         }
         child = child->next_sibling;
     }
+
     argv[argc] = NULL;
 
+    int i = 0;
+    for (; i < builtins_count; i++)
+    {
+        if (!strcmp(argv[0], builtins[i].name))
+        {
+            builtins[i].func(argc, argv);
+            free_argv(argc, argv);
+            return 1;
+        }
+    }
+
     pid_t child_pid = 0;
+
     if ((child_pid = fork()) == 0)
     {
         do_exec_cmd(argc, argv);

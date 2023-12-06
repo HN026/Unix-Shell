@@ -1,3 +1,7 @@
+/*
+@author: Huzaifa Naseer
+*/
+
 #include <unistd.h>
 #include "shell.h"
 #include "parser.h"
