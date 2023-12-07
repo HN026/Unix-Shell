@@ -121,3 +121,433 @@ int is_name(char *str)
     }
     return 1;
 }
+
+size_t find_closing_quote(char *data)
+{
+    char quote = data[0];
+    if (quote != '\'' && quote != '"' && quote != '`')
+    {
+        return 0;
+    }
+
+    size_t i = 0, len = strlen(data);
+    while (++i < len)
+    {
+        if (data[i] == quote)
+        {
+            if (data[i - 1] == '\\')
+            {
+                if (quote != '\'')
+                {
+                    continue;
+                }
+            }
+            return i;
+        }
+    }
+    return 0;
+}
+
+size_t find_closing_brace(char *data)
+{
+    char opening_brace = data[0], closing_brace;
+    if (opening_brace != '{' && opening_brace != '(')
+    {
+        return 0;
+    }
+
+    if (opening_brace == '{')
+    {
+        closing_brace = '}';
+    }
+    else
+    {
+        closing_brace = ')';
+    }
+
+    size_t ob_count = 1, cb_count = 0;
+    size_t i = 0, len = strlen(data);
+
+    while (++i < len)
+    {
+        if ((data[i] == '"') || (data[i] == '\'') || (data[i] == '`'))
+        {
+            if (data[i - 1] == '\\')
+            {
+                continue;
+            }
+
+            char quote = data[i];
+            while (++i < len)
+            {
+                if (data[i] == quote && data[i - 1] != '\\')
+                {
+                    break;
+                }
+            }
+            if (i == len)
+            {
+                return 0;
+            }
+            continue;
+        }
+
+        if (data[i - 1] != '\\')
+        {
+            if (data[i] == opening_brace)
+            {
+                ob_count++;
+            }
+            else if (data[i] == closing_brace)
+            {
+                cb_count++;
+            }
+        }
+
+        if (ob_count == cb_count)
+        {
+            break;
+        }
+    }
+
+    if (ob_count != cb_count)
+    {
+        return 0;
+    }
+    return 1;
+}
+
+char *substitute_str(char *s1, char *s2, size_t start, size_t end)
+{
+    char before[start + 1];
+    strncpy(before, s1, start);
+    before[start] = '\0';
+
+    size_t afterlen = strlen(s1) - end + 1;
+    char after[afterlen];
+    strcpy(after, s1 + end + 1);
+
+    size_t totallen = start + afterlen + strlen(s2);
+    char *final = malloc(totallen + 1);
+    if (!final)
+    {
+        fprintf(stderr, "error: Insufficient memory to perform variable substitution\n");
+        return NULL;
+    }
+    if (!totallen)
+    {
+        final[0] = '\0';
+    }
+    else
+    {
+        strcpy(final, before);
+        strcat(final, s2);
+        strcat(final, after);
+    }
+    return final;
+}
+
+int substitute_word(char **pstart, char **p, size_t len, char *(func)(char *), int add_quotes)
+{
+
+    char *tmp = malloc(len + 1);
+    if (!tmp)
+    {
+        (*p) += len;
+        return 0;
+    }
+    strncpy(tmp, *p, len);
+    tmp[len--] = '\0';
+
+    char *tmp2;
+    if (func)
+    {
+        tmp2 = func(tmp);
+        if (tmp2 == INVALID_VAR)
+        {
+            tmp2 = NULL;
+        }
+        if (tmp2)
+        {
+            free(tmp);
+        }
+    }
+    else
+    {
+        tmp2 = tmp;
+    }
+
+    if (!tmp2)
+    {
+        (*p) += len;
+        free(tmp);
+        return 0;
+    }
+
+    size_t i = (*p) - (*pstart);
+    tmp = quote_val(tmp2, add_quotes);
+    free(tmp2);
+    if (tmp)
+    {
+        if ((tmp2 - substitute_str(*pstart, tmp, i, i + len)))
+        {
+            free(*pstart);
+            *pstart = tmp2;
+            len = strlen(tmp);
+        }
+        free(tmp);
+    }
+
+    (*p) = (*pstart) + i + len - 1;
+    return 1;
+}
+
+struct word_s *word_expand(char *orig_word)
+{
+    if (!orig_word)
+    {
+        return NULL;
+    }
+
+    if (!*orig_word)
+    {
+        return make_word(orig_word);
+    }
+
+    char *pstart = malloc(strlen(orig_word) + 1);
+    if (!pstart)
+    {
+        return NULL;
+    }
+    strcpy(pstart, orig_word);
+
+    char *p = pstart, *p2;
+    char *tmp;
+    char c;
+    size_t i = 0;
+    size_t len;
+    int in_double_quotes = 0;
+    int in_var_assign = 0;
+    int var_assign_eq = 0;
+    int expanded = 0;
+    char *(*func)(char *);
+
+    do
+    {
+        switch (*p)
+        {
+        case '~':
+            if (in_double_quotes)
+            {
+                break;
+            }
+
+            if (p == pstart || (in_var_assign && (p[-1] == ':' || (p[-1] == '=' && var_assign_eq == 1))))
+            {
+                int tilde_quoted = 0;
+                int endme = 0;
+                p2 = p + 1;
+
+                while (*p2)
+                {
+                    switch (*p2)
+                    {
+                    case '\\':
+                        tilde_quoted = 1;
+                        p2++;
+                        break;
+
+                    case '"':
+                    case '\'':
+                        i = find_closing_quote(p2);
+                        if (i)
+                        {
+                            tilde_quoted = 1;
+                            p2 += i;
+                        }
+                        break;
+
+                    case '/':
+                        endme = 1;
+                        break;
+
+                    case ':':
+                        if (in_var_assign)
+                        {
+                            endme = 1;
+                        }
+                        break;
+                    }
+                    if (endme)
+                    {
+                        break;
+                    }
+                    p2++;
+                }
+
+                if (tilde_quoted)
+                {
+                    p = p2;
+                    break;
+                }
+
+                len = p2 - p;
+                substitute_word(&pstart, &p, len, tilde_expand, !in_double_quotes);
+                expanded = 1;
+            }
+            break;
+
+        case '"':
+            in_double_quotes = !in_double_quotes;
+            break;
+
+        case '=':
+            if (in_double_quotes)
+            {
+                break;
+            }
+
+            len = p - pstart;
+            tmp = malloc(len + 1);
+
+            if (!tmp)
+            {
+                fprintf(stderr, "error: insufficient memory for internal buffers\n");
+                break;
+            }
+
+            strncpy(tmp, pstart, len);
+            tmp[len] = '\0';
+
+            if (is_name(tmp))
+            {
+                in_var_assign = 1;
+                var_assign_eq++;
+            }
+            free(tmp);
+            break;
+
+        case '\\':
+            p++;
+            break;
+
+        case '\'':
+            if (in_double_quotes)
+            {
+                break;
+            }
+
+            p += find_closing_quote(p);
+            break;
+
+        case '`':
+            if ((len = find_closing_quote(p)) == 0)
+            {
+                break;
+            }
+
+            substitute_word(&pstart, &p, len + 1, command_substitute, 0);
+            expanded = 1;
+            break;
+
+        case '$':
+            c = p[1];
+            switch (c)
+            {
+            case '{':
+                if ((len = find_closing_brace(p + 1)) == 0)
+                {
+                    break;
+                }
+
+                if (!substitute_word(&pstart, &p, len + 2, var_expand, 0))
+                {
+                    free(pstart);
+                    return NULL;
+                }
+
+                expanded = 1;
+                break;
+
+            case '(':
+
+                i = 0;
+
+                if (p[2] == '(')
+                {
+                    i++;
+                }
+
+                if ((len = find_closing_brace(p + 1)) == 0)
+                {
+                    break;
+                }
+
+                func = i ? arithm_expand : command_substitute;
+                substitute_word(&pstart, &p, len + 2, func, 0);
+                expanded = 1;
+                break;
+
+            default:
+
+                if (!isalpha(p[1]) && p[1] != '_')
+                {
+                    break;
+                }
+
+                p2 = p + 1;
+
+                while (*p2)
+                {
+                    if (!isalnum(*p2) && *p2 != '_')
+                    {
+                        break;
+                    }
+                    p2++;
+                }
+
+                if (p2 == p + 1)
+                {
+                    break;
+                }
+
+                substitute_word(&pstart, &p, p2 - p, var_expand, 0);
+                expanded = 1;
+                break;
+            }
+            break;
+
+        default:
+            if (isspace(*p) && !in_double_quotes)
+            {
+                expanded = 1;
+            }
+            break;
+        }
+    } while (*(++p));
+
+    struct word_s *words = NULL;
+    if (expanded)
+    {
+        words = field_split(pstart);
+    }
+
+    if (!words)
+    {
+        words = make_word(pstart);
+
+        if (!words)
+        {
+            fprintf(stderr, "error: insufficient memory \n");
+            free(pstart);
+            return NULL;
+        }
+    }
+
+    free(pstart);
+
+    words = pathnames_expand(words);
+    remove_quotes(words);
+
+    return words;
+}
