@@ -551,3 +551,345 @@ struct word_s *word_expand(char *orig_word)
 
     return words;
 }
+
+char *tilde_expand(char *s)
+{
+    char *home = NULL;
+    size_t len = strlen(s);
+    char *s2 = NULL;
+    struct symtab_entry_s *entry;
+
+    if (len == 1)
+    {
+        entry = get_symtab_entry("HOME");
+        if (entry && entry->val)
+        {
+            home = entry->val;
+        }
+        else
+        {
+            struct passwd *pass;
+            pass = getpwuid(getuid());
+            if (pass)
+            {
+                home = pass->pw_dir;
+            }
+        }
+    }
+    else
+    {
+        struct passwd *pass;
+        pass = getpwnam(s + 1);
+        if (pass)
+        {
+            home = pass->pw_dir;
+        }
+    }
+
+    if (!home)
+    {
+        return NULL;
+    }
+
+    s2 = malloc(strlen(home) + 1);
+    if (!s2)
+    {
+        return NULL;
+    }
+    strcpy(s2, home);
+    return s2;
+}
+
+/*
+ * perform variable (parameter) expansion.
+ * our options are:
+ * syntax           POSIX description   var defined     var undefined
+ * ======           =================   ===========     =============
+ * $var             Substitute          var             nothing
+ * ${var}           Substitute          var             nothing
+ * ${var:-thing}    Use Deflt Values    var             thing (var unchanged)
+ * ${var:=thing}    Assgn Deflt Values  var             thing (var set to thing)
+ * ${var:?message}  Error if NULL/Unset var             print message and exit shell,
+ *                                                      (if message is empty, print
+ *                                                      "var: parameter not set")
+ * ${var:+thing}    Use Alt. Value      thing           nothing
+ * ${#var}          Calculate String Length
+ *
+ * Using the same options in the table above, but without the colon, results in
+ * a test for a parameter that is unset. using the colon results in a test for a
+ * parameter that is unset or null.
+ *
+ *
+ *       ${parameter%[word]}      Remove Smallest Suffix Pattern
+ *       ${parameter%%[word]}     Remove Largest Suffix Pattern
+ *       ${parameter#[word]}      Remove Smallest Prefix Pattern
+ *       ${parameter##[word]}     Remove Largest Prefix Pattern
+ */
+
+/*
+ * perform variable (parameter) expansion.
+ *
+ * returns an malloc'd string of the expanded variable value, or NULL if the
+ * variable is not defined or the expansion failed.
+ *
+ * this function should not be called directly by any function outside of this
+ * module (hence the double underscores that prefix the function name).
+ */
+
+char *var_expand(char *orig_var_name)
+{
+    /*Sanity check*/
+    if (!orig_var_name)
+    {
+        return NULL;
+    }
+
+    /*
+     * if the var subsititution is in the $var format, remove the $.
+     * if it's in the ${var} format, remove the ${}.
+     */
+
+    /*Skip the $*/
+    orig_var_name++;
+    size_t len = strlen(orig_var_name);
+    if (*orig_var_name == '{')
+    {
+        orig_var_name[len - 1] = '\0';
+        orig_var_name++;
+    }
+
+    if (!*orig_var_name)
+    {
+        return NULL;
+    }
+
+    int get_length = 0;
+
+    if (*orig_var_name == '#')
+    {
+        if (strchr(orig_var_name, ':'))
+        {
+            fprintf(stderr, "error: Invalid variable substitution: %s\n", orig_var_name);
+            return INVALID_VAR;
+        }
+        get_length = 1;
+        orig_var_name++;
+    }
+
+    if (!*orig_var_name)
+    {
+        return NULL;
+    }
+
+    char *sub = strchr(orig_var_name, ':');
+    if (!sub)
+    {
+        sub = strchr_any(orig_var_name, '-=?+%#');
+    }
+
+    len = sub ? (size_t)(sub - orig_var_name) : strlen(orig_var_name);
+
+    if (sub && *sub == ':')
+    {
+        sub++;
+    }
+
+    char var_name[len + 1];
+    strncpy(var_name, orig_var_name, len);
+    var_name[len] = '\0';
+
+    char *empty_val = "";
+    char *tmp = NULL;
+    char setme = 0;
+
+    struct symtab_entry_s *entry = get_symtab_entry(var_name);
+    tmp = (entry && entry->val && entry->val[0]) ? entry->val : empty_val;
+
+    if (!tmp || tmp == empty_val)
+    {
+        if (sub && *sub)
+        {
+            switch (sub[0])
+            {
+            case '-':
+                tmp = sub + 1;
+                break;
+
+            case '=':
+                tmp = sub + 1;
+                setme = 1;
+                break;
+
+            case '?':
+                if (sub[1] == '\0')
+                {
+                    fprintf(stderr, "error: %s: parameter not set\n", var_name);
+                }
+                else
+                {
+                    fprintf(stderr, "error: %s: %s\n", var_name, sub + 1);
+                }
+                return INVALID_VAR;
+
+            case '+':
+                return NULL;
+
+            case '#':
+            case '%':
+                break;
+
+            default:
+                return INVALID_VAR;
+            }
+        }
+
+        else
+        {
+            tmp = empty_val;
+        }
+    }
+
+    else
+    {
+        if (sub && *sub)
+        {
+            switch (sub[0])
+            {
+            case '-':
+            case '=':
+            case '?':
+                break;
+
+            case '+':
+                tmp = sub + 1;
+                break;
+
+            case '%':
+                sub++;
+
+                char *p = word_expand_to_str(tmp);
+
+                if (!p)
+                {
+                    return INVALID_VAR;
+                }
+                int longest = 0;
+                if (*sub == '%')
+                {
+                    longest = 1,
+                    sub++;
+                }
+
+                if ((len = match_suffix(sub, p, longest)) == 0)
+                {
+                    return p;
+                }
+
+                char *p2 = malloc(len + 1);
+                if (p2)
+                {
+                    strncpy(p2, p, len);
+                    p2[len] = '\0';
+                }
+                free(p);
+                return p2;
+
+            case '#':
+                sub++;
+                p = word_expand_to_str(tmp);
+
+                if (!p)
+                {
+                    return INVALID_VAR;
+                }
+
+                longest = 0;
+                if (*sub == '#')
+                {
+                    longest = 1, sub++;
+                }
+
+                if ((len = match_prefix(sub, p, longest)) == 0)
+                {
+                    return p;
+                }
+
+                p2 = malloc(strlen(p) - len + 1);
+                if (p2)
+                {
+                    strcpy(p2, p + len);
+                }
+                free(p);
+
+            default: /*Unknown Operator*/
+                return INVALID_VAR;
+            }
+        }
+        /*No substitution clause. Return the variable's original value*/
+    }
+
+    /* We have substituted the variable's val. Now go POSIX style on it*/
+
+    int expanded = 0;
+    if (tmp)
+    {
+        if ((tmp = word_expanded_to_str(tmp)))
+        {
+            expanded = 1;
+        }
+    }
+
+    if (setme)
+    {
+        /*if variable not defined */
+        if (!entry)
+        {
+            entry = add_to_symtab(var_name);
+        }
+
+        /* set variable value */
+        if (entry)
+        {
+            symtab_entry_setval(entry, tmp);
+        }
+    }
+
+    char buf[32];
+    char *p = NULL;
+    if (get_length)
+    {
+        if (!tmp)
+        {
+            sprintf(buf, "0");
+        }
+        else
+        {
+            sprintf(buf, "%lu", strlen(tmp));
+        }
+
+        /* get a copy of the buffer */
+        p = malloc(strlen(buf) + 1);
+        if (p)
+        {
+            strcpy(p, buf);
+        }
+    }
+    else
+    {
+        /* "normal" variable value */
+        p = malloc(strlen(tmp) + 1);
+        if (p)
+        {
+            strcpy(p, tmp);
+        }
+    }
+
+    /*Free the expanded word list*/
+    if (expanded)
+    {
+        free(tmp);
+    }
+
+    /*return the result*/
+    return p ?: INVALID_VAR;
+}
