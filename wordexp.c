@@ -893,3 +893,27 @@ char *var_expand(char *orig_var_name)
     /*return the result*/
     return p ?: INVALID_VAR;
 }
+
+char *command_substitute(char *orig_cmd)
+{
+    char b[1024];
+    size_t bufsz = 0;
+    char *buf = NULL;
+    char *p = NULL;
+    int i = 0;
+    int backquoted = (*orig_cmd == '`');
+
+    char *cmd = malloc(strlen(orig_cmd + 1));
+
+    if(!cmd)
+    {
+        fprintf(stderr, "error: Insufficient memory to perform command substitution\n");
+        return NULL;
+    }
+
+    strcpy(cmd, orig_cmd+(backquoted ? 1: 2));
+
+    char *cmd2 = cmd;
+    size_t cmdlen = str
+
+}
