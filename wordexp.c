@@ -896,24 +896,405 @@ char *var_expand(char *orig_var_name)
 
 char *command_substitute(char *orig_cmd)
 {
-    char b[1024];
-    size_t bufsz = 0;
-    char *buf = NULL;
-    char *p = NULL;
-    int i = 0;
+    char    b[1024];
+    size_t  bufsz = 0;
+    char   *buf   = NULL;
+    char   *p     = NULL;
+    int     i     = 0;
     int backquoted = (*orig_cmd == '`');
 
-    char *cmd = malloc(strlen(orig_cmd + 1));
-
+    char *cmd = malloc(strlen(orig_cmd+1));
+    
     if(!cmd)
     {
-        fprintf(stderr, "error: Insufficient memory to perform command substitution\n");
+        fprintf(stderr, "error: insufficient memory to perform command substitution\n");
+        return NULL;
+    }
+    
+    strcpy(cmd, orig_cmd+(backquoted ? 1 : 2));
+    
+    char *cmd2 = cmd;
+    size_t cmdlen = strlen(cmd);
+    
+    if(backquoted)
+    {
+        /* remove the last back quote */
+        if(cmd[cmdlen-1] == '`')
+        {
+            cmd[cmdlen-1] = '\0';
+        }
+        
+	/* fix the backslash-escaped chars */
+        char *p1 = cmd;
+        
+	do
+        {
+            if(*p1 == '\\' &&
+               (p1[1] == '$' || p1[1] == '`' || p1[1] == '\\'))
+            {
+                char *p2 = p1, *p3 = p1+1;
+                while((*p2++ = *p3++))
+                {
+                    ;
+                }
+            }
+        } while(*(++p1));
+    }
+    else
+    {
+        /* remove the last closing brace */
+        if(cmd[cmdlen-1] == ')')
+        {
+            cmd[cmdlen-1] = '\0';
+        }
+    }
+
+    FILE *fp = popen(cmd2, "r");
+
+    /* check if we have opened the pipe */
+    if(!fp)
+    {
+        free(cmd2);
+        fprintf(stderr, "error: failed to open pipe: %s\n", strerror(errno));
         return NULL;
     }
 
-    strcpy(cmd, orig_cmd+(backquoted ? 1: 2));
+    /* read the command output */
+    while((i = fread(b, 1, 1024, fp)))
+    {
+        /* first time. alloc buffer */
+        if(!buf)
+        {
+            /* add 1 for the null terminating byte */
+            buf = malloc(i+1);
+            if(!buf)
+            {
+                goto fin;
+            }
+            
+	    p   = buf;
+        }
+        /* extend buffer */
+        else
+        {
+            char *buf2 = realloc(buf, bufsz+i+1);
+            
+	    if(!buf2)
+            {
+                free(buf);
+                buf = NULL;
+                goto fin;
+            }
+            
+	    buf = buf2;
+            p   = buf+bufsz;
+        }
+        
+	bufsz += i;
+        
+	/* copy the input and add the null terminating byte */
+        memcpy(p, b, i);
+        p[i] = '\0';
+    }
+    
+    if(!bufsz)
+    {
+        free(cmd2);
+        return NULL;
+    }
+    
+    /* now remove any trailing newlines */
+    i = bufsz-1;
+    
+    while(buf[i] == '\n' || buf[i] == '\r')
+    {
+        buf[i] = '\0';
+        i--;
+    }
 
-    char *cmd2 = cmd;
-    size_t cmdlen = str
+fin:
+    /* close the pipe */
+    pclose(fp);
 
+    /* free used memory */
+    free(cmd2);
+    
+    if(!buf)
+    {
+        fprintf(stderr, "error: insufficient memory to perform command substitution\n");
+    }
+    
+    return buf;
+}
+
+static inline int is_IFS_char(char c, char *IFS)
+{
+    if(!*IFS)
+    {
+        return 0;
+    }
+
+    do 
+    {
+        if(c==*IFS)
+        {
+            return 1;
+        }
+    } while(*(++IFS));
+
+    return 0;
+}
+
+void skip_IFS_whitespace(char **str, char *IFS)
+{
+    char *IFS2 = IFS;
+    char *s2 = *str;
+
+    do
+    {
+        if(*s2 == *IFS2)
+        {
+            s2++;
+            IFS2 = IFS - 1;
+        }
+    } while (*(++IFS2));
+
+    *str = s2;
+}
+
+void skip_IFS_delim(char *str, char *IFS_space, char *IFS_delim, size_t *_i, size_t len)
+{
+    size_t i = *_i;
+
+    while(( i < len) && is_IFS_char(str[i], IFS_space))
+    {
+        i++;
+    }
+
+    while((i < len) && is_IFS_char(str[i], IFS_delim))
+    {
+        i++;
+    }
+
+    while((i<len) && is_IFS_char(str[i], IFS_space))
+    {
+        i++;
+    }
+
+    *_i = i;
+}
+
+/*
+ * convert the words resulting from a word expansion into separate fields.
+ *
+ * returns a pointer to the first field, NULL if no field splitting was done.
+ */
+
+struct word_s *field_split(char *str)
+{
+    struct symtab_entry_s *entry = get_symtab_entry("IFS");
+    char *IFS = entry ? entry->val : NULL;
+
+    char *p;
+
+    if(!IFS)
+    {
+        IFS = " \t\n";
+    }
+
+    if(IFS[0]=='\0')
+    {
+        return NULL;
+    }
+
+    char *IFS_space[64];
+    char *IFS_delim[64];
+
+    if(strcmp(IFS, " \t\n") == 0)
+    {
+        IFS_space[0] = ' ';
+        IFS_space[1] = '\t';
+        IFS_space[2] = '\n';
+        IFS_space[3] = '\0';
+        IFS_delim[0] = '\0';
+    }
+    else
+    {
+        p = IFS;
+        char *sp = IFS_space;
+        char *dp = IFS_delim;
+
+        do
+        {
+            if(isspace(*p))
+            {
+                *sp++ = *p++;
+            }
+            else
+            {
+                *dp++ = *p++;
+            }
+        } while (*p);
+
+        *sp = '\0';
+        *dp = '\0';
+    }
+
+    size_t len = strlen(str);
+    size_t i = 0, j = 0, k;
+    int fields = i;
+    char quote = 0;
+
+    skip_IFS_whitespace(&str, IFS_space);
+    
+    do 
+    {
+        switch(str[i])
+        {
+            case '\\':
+                if(quote != '\'')
+                {
+                    i++;
+                }
+                break;
+
+            case '\'':
+            case '"':
+            case '`':
+                if(quote==str[i])
+                {
+                    quote = 0;
+                }
+                else
+                {
+                    quote = str[i];
+                }
+                break;
+            
+            default:
+
+                if(quote)
+                {
+                    break;
+                }
+
+                if(is_IFS_char(str[i], IFS_space) || is_IFS_char(str[i], IFS_delim))
+                {
+                    skip_IFS_delim(str, IFS_space, IFS_delim, &i, len);
+                    if(i < len)
+                    {
+                        fields++;
+                    }
+                }
+                break;
+        }
+    } while ( ++i < len);
+
+    if (fields == 1)
+    {
+        return NULL;
+    }
+
+    struct word_s *first_field = NULL;
+    struct word_s *cur = NULL;
+
+    i = 0;
+    j = 0;
+    quote = 0;
+
+    do 
+    {
+        switch(str[i])
+        {
+            case '\\':
+                if(quote != '\'')
+                {
+                    i++;
+                }
+                break;
+
+            case '\'':
+                p = str + i + 1;
+                while(*p && *p != '\'')
+                {
+                    p++;
+                }
+                i = p - str;
+                break;
+
+            case '"':
+            case '`':
+                if( quote == str[i] )
+                {
+                    quote = 0;
+                }
+                else
+                {
+                    quote = str[i];
+                }
+                break;
+
+            default:
+                if(quote)
+                {
+                    break;
+                }
+
+                if(is_IFS_char(str[i], IFS_space) || 
+                is_IFS_char(str[i], IFS_delim) || (i==len))
+                {
+                    char *tmp = malloc(i-j+1);
+
+                    if(!tmp)
+                    {
+                        fprintf(stderr, "error: Insufficient memory for field splitting\n");
+                        return first_field;
+                    }
+
+                    strncpy(tmp, str+j, i-j);
+                    tmp[i-j] = '\0';
+
+                    struct word_s *fld = malloc(sizeof(struct word_s));
+
+                    if(!fld)
+                    {
+                        free(tmp);
+                        return first_field;
+                    }
+
+                    fld->data = tmp;
+                    fld->len = i-j;
+                    fld->next = NULL;
+
+                    if(!first_field)
+                    {
+                        first_field = fld;
+                    }
+
+                    if(!cur)
+                    {
+                        cur = fld;
+                    }
+
+                    else
+                    {
+                        cur->next = fld;
+                        cur = fld;
+                    }
+
+                    k = i;
+
+                    skip_IFS_delim(str, IFS_space, IFS_delim, &i, len);
+                    j = i;
+
+                    if(i != k && i < len)
+                    {
+                        i--;
+                    }
+                }
+                break;
+        }
+    } while(++i <= len);
+
+    return first_field;
 }
