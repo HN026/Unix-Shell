@@ -1298,3 +1298,175 @@ struct word_s *field_split(char *str)
 
     return first_field;
 }
+
+struct word_s *pathnames_expand(struct word_s *words)
+{
+    struct word_s *w = words;
+    struct word_s *pw = NULL;
+
+    while(w)
+    {
+        char *p = w->data;
+
+        if(!has_glob_chars(p, strlen(p)))
+        {
+            pw = w;
+            w = w->next;
+            continue;
+        }
+
+        glob_t glob;
+        char **matches = get_filename_matches(p, &glob);
+
+        if(!matches || !matches[0])
+        {
+            globfree(&glob);
+        }
+        else
+        {
+            struct word_s *head = NULL, *tail = NULL;
+            for(size_t j = 0; j<glob.gl_pathc; j++)
+            {
+                if(matches[j][0] == '.' && 
+                (matches[j][1] == '.' || matches[j][1] == '\0' || matches[j][1] == '/'))
+                {
+                    continue;
+                }
+
+                if(!head)
+                {
+                    head = make_word(matches[j]);
+                    tail = head;
+                }
+                else
+                {
+                    tail->next = make_word(matches[j]);
+
+                    if(tail->next)
+                    {
+                        tail = tail->next;
+                    }
+                }
+            }
+
+            if( w == words )
+            {
+                words = head;
+            }
+            else if (pw)
+            {
+                pw->next = head;
+            }
+
+            pw = tail;
+            tail->next = w->next;
+
+            w->next = NULL;
+            free_all_words(w);
+            w = tail;
+
+            globfree(&glob);
+        }
+
+        pw = w;
+        w = w->next;
+    }
+    return words;
+}
+
+
+/*
+* Perform quote removal.
+*/
+
+void remove_quotes(struct word_s *wordlist)
+{
+    if(!wordlist)
+    {
+        return;
+    }
+
+    int in_double_quotes = 0;
+    struct word_s *word = wordlist;
+    char *p;
+
+    while(word)
+    {
+        p = word->data;
+        while(*p)
+        {
+            switch(*p)
+            {
+                case '"':
+                    in_double_quotes = !in_double_quotes;
+                    delete_char_at(p, 0);
+                    break;
+
+                case '\'':
+                    if(in_double_quotes)
+                    {
+                        p++;
+                        break;
+                    }
+                    
+                    delete_char_at(p, 0);
+
+                    while(*p && *p != '\'')
+                    {
+                        p++;
+                    }
+
+                    if(*p == '\'')
+                    {
+                        delete_char_at(p, 0);
+                    }
+                    break;
+
+                case '`':
+                    delete_char_at(p, 0);
+                    break;
+
+                case '\v':
+                case '\f':
+                case '\t':
+                case '\r':
+                case '\n':
+                    p++;
+                    break;
+
+                case '\\':
+                    if(in_double_quotes)
+                    {
+                        switch(p[1])
+                        {
+                            case '$':
+                            case '`':
+                            case '"':
+                            case '\\':
+                            case '\n':
+                                delete_char_at(p, 0);
+                                p++;
+                                break;
+                            
+                            default:
+                                p++;
+                                break;
+                        }
+                    }
+                    else
+                    {
+                        delete_char_at(p, 0);
+                        p++;
+                    }
+                    break;
+
+                    default:
+                        p++;
+                        break;
+            }
+        }
+
+        word->len = strlen(word->data);
+        word = word->next;
+    }
+}
