@@ -1470,3 +1470,17 @@ void remove_quotes(struct word_s *wordlist)
         word = word->next;
     }
 }
+
+char *word_expand_to_str(char *word)
+{
+    struct word_s *w = word_expand(word);
+    if(!w)
+    {
+        return NULL;
+    }
+
+    char *res = wordlist_to_str(w);
+    free_all_words(w);
+
+    return res;
+}
