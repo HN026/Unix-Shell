@@ -15,21 +15,20 @@ int parse_and_execute(struct source_s *src);
 
 int dump(int argc, char **argv); // Builtin Utilities
 
-struct builtin_s
-{
-    char *name;                         /* Utility Name */
-    int (*func)(int argc, char **argv); /* Function to call to execute the utility. */
+struct builtin_s {
+  char *name; /* Utility Name */
+  int (*func)(int argc,
+              char **argv); /* Function to call to execute the utility. */
 };
 
 extern struct builtin_s builtins[];
 
 extern int builtins_count;
 
-struct word_s
-{
-    char *data;
-    int len;
-    struct word_s *next;
+struct word_s {
+  char *data;
+  int len;
+  struct word_s *next;
 };
 
 /*Word expansion functions*/

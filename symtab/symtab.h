@@ -11,40 +11,36 @@
 
 /* the type of a symbol table entry's value */
 
-enum symbol_type_e
-{
-    SYM_STR,
-    SYM_FUNC,
+enum symbol_type_e {
+  SYM_STR,
+  SYM_FUNC,
 };
 
 /* the symbol table entry structure */
 
-struct symtab_entry_s
-{
-    char *name;
-    enum symbol_type_e val_type;
-    char *val;
-    unsigned int flags;
-    struct symtab_entry_s *next;
-    struct node_s *func_body;
+struct symtab_entry_s {
+  char *name;
+  enum symbol_type_e val_type;
+  char *val;
+  unsigned int flags;
+  struct symtab_entry_s *next;
+  struct node_s *func_body;
 };
 
 /* the symbol table structure */
-struct symtab_s
-{
-    int level;
-    struct symtab_entry_s *first, *last;
+struct symtab_s {
+  int level;
+  struct symtab_entry_s *first, *last;
 };
 
 /* values for the flags field of struct symtab_entry_s */
 #define FLAG_EXPORT (1 << 0) /* Export entry to forked commands */
 
 /* the symbol table stack structure */
-struct symtab_stack_s
-{
-    int symtab_count;
-    struct symtab_s *symtab_list[MAX_SYMTAB];
-    struct symtab_s *global_symtab, *local_symtab;
+struct symtab_stack_s {
+  int symtab_count;
+  struct symtab_s *symtab_list[MAX_SYMTAB];
+  struct symtab_s *global_symtab, *local_symtab;
 };
 
 struct symtab_s *new_symtab(int level);
