@@ -77,7 +77,7 @@ This project uses `clang-format` for code formatting. The style is defined in th
 To format your code, navigate to the root directory of the project in your terminal and run the following command:
 
 ```bash
-find . -iname *.c -o -iname *.h | xargs clang-format -i
+find . -iname '*.c' -o -iname '*.h' | xargs clang-format -i
 ```
 
 ## Author
