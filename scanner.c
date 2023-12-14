@@ -5,6 +5,7 @@
 #include "scanner.h"
 #include "shell.h"
 #include "source.h"
+#include <ctype.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>

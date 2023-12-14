@@ -12,6 +12,14 @@
 #include <string.h>
 
 int main(int argc, char **argv) {
+  printf("\033[1;32m");
+  printf("Welcome to my shell!\n");
+  printf("This shell was created by @HuzaifaNaseer.\n");
+  printf("Check out my GitHub: https://github.com/HN026\n");
+  printf(
+      "Connect with me on LinkedIn: https://linkedin.com/in/huzaifanaseer\n");
+  printf("\033[0m");
+
   char *cmd;
   initsh();
   do {

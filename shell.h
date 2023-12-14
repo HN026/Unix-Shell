@@ -1,37 +1,45 @@
 /*
-@author: Huzaifa Naseer
-*/
+ *@author: Huzaifa Naseer
+ */
 
 #ifndef SHELL_H
 #define SHELL_H
+
 #include "source.h"
+#include <glob.h>
+#include <stddef.h> /* size_t */
 
 void print_prompt1(void);
 void print_prompt2(void);
-void initsh(void);
-
 char *read_cmd(void);
 int parse_and_execute(struct source_s *src);
 
-int dump(int argc, char **argv); // Builtin Utilities
+void initsh(void);
 
+/* shell builtin utilities */
+int dump(int argc, char **argv);
+
+/* struct for builtin utilities */
 struct builtin_s {
-  char *name; /* Utility Name */
+  char *name; /* utility name */
   int (*func)(int argc,
-              char **argv); /* Function to call to execute the utility. */
+              char **argv); /* function to call to execute the utility */
 };
 
+/* the list of builtin utilities */
 extern struct builtin_s builtins[];
 
+/* and their count */
 extern int builtins_count;
 
+/* struct to represent the words resulting from word expansion */
 struct word_s {
   char *data;
   int len;
   struct word_s *next;
 };
 
-/*Word expansion functions*/
+/* word expansion functions */
 struct word_s *make_word(char *word);
 void free_all_words(struct word_s *first);
 
@@ -52,5 +60,17 @@ struct word_s *field_split(char *str);
 void remove_quotes(struct word_s *wordlist);
 
 char *arithm_expand(char *__expr);
+
+/* some string manipulation functions */
+char *strchr_any(char *string, char *chars);
+char *quote_val(char *val, int add_quotes);
+int check_buffer_bounds(int *count, int *len, char ***buf);
+void free_buffer(int len, char **buf);
+
+/* pattern matching functions */
+int has_glob_chars(char *p, size_t len);
+int match_prefix(char *pattern, char *str, int longest);
+int match_suffix(char *pattern, char *str, int longest);
+char **get_filename_matches(char *pattern, glob_t *matches);
 
 #endif
